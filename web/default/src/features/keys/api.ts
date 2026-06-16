@@ -67,6 +67,19 @@ export async function createApiKey(
   return res.data
 }
 
+export async function getTokenCreateUnlockStatus(): Promise<
+  ApiResponse<{
+    bound: boolean
+    unlocked: boolean
+    unlocked_until?: string | null
+    room_id: string
+    keyword: string
+  }>
+> {
+  const res = await api.get('/api/token/create-unlock-status')
+  return res.data
+}
+
 // Update an existing API key
 export async function updateApiKey(
   data: ApiKeyFormData & { id: number }

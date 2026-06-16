@@ -150,6 +150,10 @@ export function SidebarModulesSection({
         title: t('Subscription Management'),
         description: t('Manage subscription plans and pricing.'),
       },
+      community_bot: {
+        title: t('Community Bot'),
+        description: t('Manage dc.hhhl.cc group check-in and token unlock.'),
+      },
     },
   }
   const formDefaults = useMemo(() => config, [config])

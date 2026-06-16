@@ -164,11 +164,39 @@ func GetTokenUsage(c *gin.Context) {
 	})
 }
 
+func GetTokenCreateUnlockStatus(c *gin.Context) {
+	status, err := model.GetCommunityTokenCreateUnlockStatus(c.GetInt("id"))
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	common.ApiSuccess(c, status)
+}
+
 func AddToken(c *gin.Context) {
 	token := model.Token{}
 	err := c.ShouldBindJSON(&token)
 	if err != nil {
 		common.ApiError(c, err)
+		return
+	}
+	unlockStatus, err := model.GetCommunityTokenCreateUnlockStatus(c.GetInt("id"))
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	if !unlockStatus.Bound {
+		c.JSON(http.StatusOK, gin.H{
+			"success": false,
+			"message": "请先绑定 dc.hhhl.cc OAuth 后再去社区聊天室发送关键词解锁。",
+		})
+		return
+	}
+	if !unlockStatus.Unlocked {
+		c.JSON(http.StatusOK, gin.H{
+			"success": false,
+			"message": "请先在社区聊天室发送关键词解锁",
+		})
 		return
 	}
 	if len(token.Name) > 50 {

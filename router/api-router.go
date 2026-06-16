@@ -198,6 +198,17 @@ func SetApiRouter(router *gin.Engine) {
 			optionRoute.POST("/waffo-pancake/subscription-product-options", controller.ListWaffoPancakeSubscriptionProductOptions)
 		}
 
+		// Community bot management (root only)
+		communityBotRoute := apiRouter.Group("/community-bot")
+		communityBotRoute.Use(middleware.RootAuth())
+		{
+			communityBotRoute.GET("/config", controller.GetCommunityBotConfig)
+			communityBotRoute.PUT("/config", controller.UpdateCommunityBotConfig)
+			communityBotRoute.PUT("/modules/group-checkin", controller.UpdateCommunityBotGroupCheckin)
+			communityBotRoute.PUT("/modules/token-unlock", controller.UpdateCommunityBotTokenUnlock)
+			communityBotRoute.POST("/sync-once", controller.SyncCommunityBotOnce)
+		}
+
 		// Custom OAuth provider management (root only)
 		customOAuthRoute := apiRouter.Group("/custom-oauth-provider")
 		customOAuthRoute.Use(middleware.RootAuth())
@@ -269,6 +280,7 @@ func SetApiRouter(router *gin.Engine) {
 		{
 			tokenRoute.GET("/", controller.GetAllTokens)
 			tokenRoute.GET("/search", middleware.SearchRateLimit(), controller.SearchTokens)
+			tokenRoute.GET("/create-unlock-status", controller.GetTokenCreateUnlockStatus)
 			tokenRoute.GET("/:id", controller.GetToken)
 			tokenRoute.POST("/:id/key", middleware.CriticalRateLimit(), middleware.DisableCache(), controller.GetTokenKey)
 			tokenRoute.POST("/", controller.AddToken)

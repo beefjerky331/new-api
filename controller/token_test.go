@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/model"
@@ -48,21 +49,21 @@ type sqliteColumnInfo struct {
 }
 
 type legacyToken struct {
-	Id                 int            `gorm:"primaryKey"`
-	UserId             int            `gorm:"index"`
-	Key                string         `gorm:"column:key;type:char(48);uniqueIndex"`
-	Status             int            `gorm:"default:1"`
-	Name               string         `gorm:"index"`
-	CreatedTime        int64          `gorm:"bigint"`
-	AccessedTime       int64          `gorm:"bigint"`
-	ExpiredTime        int64          `gorm:"bigint;default:-1"`
-	RemainQuota        int            `gorm:"default:0"`
+	Id                 int    `gorm:"primaryKey"`
+	UserId             int    `gorm:"index"`
+	Key                string `gorm:"column:key;type:char(48);uniqueIndex"`
+	Status             int    `gorm:"default:1"`
+	Name               string `gorm:"index"`
+	CreatedTime        int64  `gorm:"bigint"`
+	AccessedTime       int64  `gorm:"bigint"`
+	ExpiredTime        int64  `gorm:"bigint;default:-1"`
+	RemainQuota        int    `gorm:"default:0"`
 	UnlimitedQuota     bool
 	ModelLimitsEnabled bool
-	ModelLimits        string         `gorm:"type:text"`
-	AllowIps           *string        `gorm:"default:''"`
-	UsedQuota          int            `gorm:"default:0"`
-	Group              string         `gorm:"column:group;default:''"`
+	ModelLimits        string  `gorm:"type:text"`
+	AllowIps           *string `gorm:"default:''"`
+	UsedQuota          int     `gorm:"default:0"`
+	Group              string  `gorm:"column:group;default:''"`
 	CrossGroupRetry    bool
 	DeletedAt          gorm.DeletedAt `gorm:"index"`
 }
@@ -101,7 +102,14 @@ func openTokenControllerTestDB(t *testing.T) *gorm.DB {
 func migrateTokenControllerTestDB(t *testing.T, db *gorm.DB) {
 	t.Helper()
 
-	if err := db.AutoMigrate(&model.Token{}); err != nil {
+	if err := db.AutoMigrate(
+		&model.Token{},
+		&model.CustomOAuthProvider{},
+		&model.UserOAuthBinding{},
+		&model.CommunityBotConfig{},
+		&model.CommunityBotRoomState{},
+		&model.CommunityTokenUnlock{},
+	); err != nil {
 		t.Fatalf("failed to migrate token table: %v", err)
 	}
 }
@@ -214,6 +222,59 @@ func decodeAPIResponse(t *testing.T, recorder *httptest.ResponseRecorder) tokenA
 		t.Fatalf("failed to decode api response: %v", err)
 	}
 	return response
+}
+
+func seedCommunityOAuthProvider(t *testing.T, db *gorm.DB) *model.CustomOAuthProvider {
+	t.Helper()
+
+	provider := &model.CustomOAuthProvider{
+		Name:                  "dc.hhhl.cc",
+		Slug:                  "dc-hhhl",
+		Enabled:               true,
+		ClientId:              "client",
+		AuthorizationEndpoint: "https://dc.hhhl.cc/oauth/authorize",
+		TokenEndpoint:         "https://dc.hhhl.cc/oauth/token",
+		UserInfoEndpoint:      "https://dc.hhhl.cc/api/oauth/userinfo",
+	}
+	if err := db.Create(provider).Error; err != nil {
+		t.Fatalf("failed to seed custom oauth provider: %v", err)
+	}
+	if err := db.Create(&model.CommunityBotConfig{
+		Enabled:             true,
+		APIBaseURL:          model.DefaultCommunityBotAPIBaseURL,
+		APIToken:            "community-token",
+		PollIntervalSeconds: model.DefaultCommunityBotPollIntervalSeconds,
+		ReplyEnabled:        true,
+		OAuthProviderId:     provider.Id,
+	}).Error; err != nil {
+		t.Fatalf("failed to seed community bot config: %v", err)
+	}
+	return provider
+}
+
+func seedCommunityOAuthBinding(t *testing.T, db *gorm.DB, providerId int, userId int, providerUserId string) {
+	t.Helper()
+
+	if err := db.Create(&model.UserOAuthBinding{
+		UserId:         userId,
+		ProviderId:     providerId,
+		ProviderUserId: providerUserId,
+	}).Error; err != nil {
+		t.Fatalf("failed to seed oauth binding: %v", err)
+	}
+}
+
+func addTokenRequestBody(name string) map[string]any {
+	return map[string]any{
+		"name":                 name,
+		"expired_time":         -1,
+		"remain_quota":         100,
+		"unlimited_quota":      true,
+		"model_limits_enabled": false,
+		"model_limits":         "",
+		"group":                "default",
+		"cross_group_retry":    false,
+	}
 }
 
 func getSQLiteColumnType(t *testing.T, db *gorm.DB, tableName string, columnName string) string {
@@ -537,5 +598,73 @@ func TestGetTokenKeyRequiresOwnershipAndReturnsFullKey(t *testing.T) {
 	}
 	if strings.Contains(unauthorizedRecorder.Body.String(), token.Key) {
 		t.Fatalf("unauthorized key response leaked raw token key: %s", unauthorizedRecorder.Body.String())
+	}
+}
+
+func TestAddTokenRequiresCommunityOAuthBinding(t *testing.T) {
+	db := setupTokenControllerTestDB(t)
+	seedCommunityOAuthProvider(t, db)
+
+	ctx, recorder := newAuthenticatedContext(t, http.MethodPost, "/api/token/", addTokenRequestBody("blocked-token"), 1)
+	AddToken(ctx)
+
+	response := decodeAPIResponse(t, recorder)
+	if response.Success {
+		t.Fatalf("expected add token to fail without dc oauth binding")
+	}
+	if !strings.Contains(response.Message, "请先绑定 dc.hhhl.cc OAuth") {
+		t.Fatalf("expected binding guidance message, got %q", response.Message)
+	}
+	var count int64
+	if err := db.Model(&model.Token{}).Where("user_id = ?", 1).Count(&count).Error; err != nil {
+		t.Fatalf("failed to count tokens: %v", err)
+	}
+	if count != 0 {
+		t.Fatalf("expected no token to be created, got %d", count)
+	}
+}
+
+func TestAddTokenRequiresCommunityUnlockForBoundUser(t *testing.T) {
+	db := setupTokenControllerTestDB(t)
+	provider := seedCommunityOAuthProvider(t, db)
+	seedCommunityOAuthBinding(t, db, provider.Id, 1, "community-user-1")
+
+	ctx, recorder := newAuthenticatedContext(t, http.MethodPost, "/api/token/", addTokenRequestBody("locked-token"), 1)
+	AddToken(ctx)
+
+	response := decodeAPIResponse(t, recorder)
+	if response.Success {
+		t.Fatalf("expected add token to fail without active community unlock")
+	}
+	if response.Message != "请先在社区聊天室发送关键词解锁" {
+		t.Fatalf("expected unlock guidance message, got %q", response.Message)
+	}
+}
+
+func TestAddTokenAllowsCommunityUnlock(t *testing.T) {
+	db := setupTokenControllerTestDB(t)
+	provider := seedCommunityOAuthProvider(t, db)
+	seedCommunityOAuthBinding(t, db, provider.Id, 1, "community-user-1")
+	if err := db.Create(&model.CommunityTokenUnlock{
+		UserId:          1,
+		ProviderUserId:  "community-user-1",
+		RoomId:          model.DefaultCommunityTokenUnlockRoomID,
+		SourceMessageId: "message-1",
+		Keyword:         model.DefaultCommunityTokenUnlockKeyword,
+		UnlockedUntil:   time.Now().Add(30 * time.Minute),
+	}).Error; err != nil {
+		t.Fatalf("failed to seed community token unlock: %v", err)
+	}
+
+	ctx, recorder := newAuthenticatedContext(t, http.MethodPost, "/api/token/", addTokenRequestBody("unlocked-token"), 1)
+	AddToken(ctx)
+
+	response := decodeAPIResponse(t, recorder)
+	if !response.Success {
+		t.Fatalf("expected add token to succeed with active community unlock, got %q", response.Message)
+	}
+	var token model.Token
+	if err := db.Where("user_id = ? AND name = ?", 1, "unlocked-token").First(&token).Error; err != nil {
+		t.Fatalf("expected token to be created: %v", err)
 	}
 }
