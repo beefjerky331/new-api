@@ -56,7 +56,7 @@ const defaultGroupCheckin: CommunityBotRoomState = {
   enabled: false,
   module: 'group_checkin',
   room_id: 'anicsahlur',
-  keyword: '逗鲍签到',
+  keyword: '我要领鸡蛋',
   min_quota: 1000000,
   max_quota: 5000000,
   unlock_duration_mins: 0,
@@ -68,7 +68,7 @@ const defaultGroupCheckin: CommunityBotRoomState = {
 const defaultTokenUnlock: CommunityBotRoomState = {
   enabled: false,
   module: 'token_unlock',
-  room_id: 'amlc1bekzi',
+  room_id: 'anicsahlur',
   keyword: '我要添加令牌',
   min_quota: 0,
   max_quota: 0,

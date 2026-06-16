@@ -79,7 +79,7 @@ func TestCommunityBotGroupCheckinAwardsQuotaOncePerDay(t *testing.T) {
 		ID:         "message-1",
 		FromUserID: "community-user-1",
 		RoomID:     state.RoomId,
-		Text:       "逗鲍签到",
+		Text:       "我要领鸡蛋",
 	}, now)
 	require.NoError(t, err)
 	require.True(t, result.Handled)
@@ -90,7 +90,7 @@ func TestCommunityBotGroupCheckinAwardsQuotaOncePerDay(t *testing.T) {
 		ID:         "message-2",
 		FromUserID: "community-user-1",
 		RoomID:     state.RoomId,
-		Text:       "今天继续逗鲍签到",
+		Text:       "今天继续我要领鸡蛋",
 	}, now.Add(time.Hour))
 	require.NoError(t, err)
 	require.True(t, result.Handled)

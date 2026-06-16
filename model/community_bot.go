@@ -4,6 +4,7 @@ import (
 	"errors"
 	"time"
 
+	"github.com/QuantumNous/new-api/common"
 	"gorm.io/gorm"
 )
 
@@ -14,10 +15,10 @@ const (
 	DefaultCommunityBotAPIBaseURL             = "https://dc.hhhl.cc/api"
 	DefaultCommunityBotPollIntervalSeconds    = 15
 	DefaultCommunityGroupCheckinRoomID        = "anicsahlur"
-	DefaultCommunityGroupCheckinKeyword       = "逗鲍签到"
+	DefaultCommunityGroupCheckinKeyword       = "我要领鸡蛋"
 	DefaultCommunityGroupCheckinMinQuota      = 1000000
 	DefaultCommunityGroupCheckinMaxQuota      = 5000000
-	DefaultCommunityTokenUnlockRoomID         = "amlc1bekzi"
+	DefaultCommunityTokenUnlockRoomID         = "anicsahlur"
 	DefaultCommunityTokenUnlockKeyword        = "我要添加令牌"
 	DefaultCommunityTokenUnlockDurationMinute = 30
 )
@@ -250,6 +251,17 @@ func GetCommunityTokenCreateUnlockStatus(userId int) (*CommunityTokenCreateUnloc
 		status.RoomId = state.RoomId
 		status.Keyword = state.Keyword
 	} else if !errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, err
+	}
+
+	var user User
+	err = DB.Select("id", "role").First(&user, userId).Error
+	if err == nil && user.Role == common.RoleRootUser {
+		status.Bound = true
+		status.Unlocked = true
+		return status, nil
+	}
+	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
 		return nil, err
 	}
 

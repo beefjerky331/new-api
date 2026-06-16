@@ -104,6 +104,7 @@ func migrateTokenControllerTestDB(t *testing.T, db *gorm.DB) {
 
 	if err := db.AutoMigrate(
 		&model.Token{},
+		&model.User{},
 		&model.CustomOAuthProvider{},
 		&model.UserOAuthBinding{},
 		&model.CommunityBotConfig{},
@@ -666,5 +667,30 @@ func TestAddTokenAllowsCommunityUnlock(t *testing.T) {
 	var token model.Token
 	if err := db.Where("user_id = ? AND name = ?", 1, "unlocked-token").First(&token).Error; err != nil {
 		t.Fatalf("expected token to be created: %v", err)
+	}
+}
+
+func TestAddTokenAllowsRootUserWithoutCommunityUnlock(t *testing.T) {
+	db := setupTokenControllerTestDB(t)
+	seedCommunityOAuthProvider(t, db)
+	if err := db.Create(&model.User{
+		Id:       100,
+		Username: "root",
+		Role:     common.RoleRootUser,
+		Status:   common.UserStatusEnabled,
+	}).Error; err != nil {
+		t.Fatalf("failed to seed root user: %v", err)
+	}
+
+	ctx, recorder := newAuthenticatedContext(t, http.MethodPost, "/api/token/", addTokenRequestBody("root-token"), 100)
+	AddToken(ctx)
+
+	response := decodeAPIResponse(t, recorder)
+	if !response.Success {
+		t.Fatalf("expected root user to create token without community unlock, got %q", response.Message)
+	}
+	var token model.Token
+	if err := db.Where("user_id = ? AND name = ?", 100, "root-token").First(&token).Error; err != nil {
+		t.Fatalf("expected root token to be created: %v", err)
 	}
 }
