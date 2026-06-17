@@ -22,7 +22,9 @@ func setupCommunityBotServiceTest(t *testing.T) *model.CustomOAuthProvider {
 		&model.CommunityBotRoomState{},
 		&model.CommunityCheckinRecord{},
 		&model.CommunityTokenUnlock{},
+		&model.CommunityBotLog{},
 	))
+	model.DB.Exec("DELETE FROM community_bot_logs")
 	model.DB.Exec("DELETE FROM community_token_unlocks")
 	model.DB.Exec("DELETE FROM community_checkin_records")
 	model.DB.Exec("DELETE FROM community_bot_room_states")
@@ -189,4 +191,43 @@ func TestCommunityBotSkipsUnboundCommunityUser(t *testing.T) {
 	var count int64
 	require.NoError(t, model.DB.Model(&model.CommunityTokenUnlock{}).Count(&count).Error)
 	require.EqualValues(t, 0, count)
+}
+
+func TestCommunityBotSyncRecordsMessageLogs(t *testing.T) {
+	setupCommunityBotServiceTest(t)
+	result := &CommunityBotProcessResult{
+		Handled:        true,
+		Success:        true,
+		Code:           CommunityBotResultTokenUnlocked,
+		UserId:         1,
+		ProviderUserId: "bound-user",
+		ReplyText:      "ok",
+	}
+	err := recordCommunityBotMessageLog(&model.CommunityBotRoomState{
+		Module:  model.CommunityBotModuleTokenUnlock,
+		RoomId:  model.DefaultCommunityTokenUnlockRoomID,
+		Keyword: model.DefaultCommunityTokenUnlockKeyword,
+	}, CommunityChatMessage{
+		ID:         "log-message-1",
+		FromUserID: "internal-user-id",
+		FromUser: CommunityChatUser{
+			ID:       "internal-user-id",
+			Username: "bound-user",
+		},
+		RoomID: model.DefaultCommunityTokenUnlockRoomID,
+		Text:   "我要添加令牌",
+	}, result, nil)
+	require.NoError(t, err)
+
+	logs, total, err := model.GetCommunityBotLogs(1, 10, "", "")
+	require.NoError(t, err)
+	require.EqualValues(t, 1, total)
+	require.Len(t, logs, 1)
+	require.Equal(t, "log-message-1", logs[0].MessageId)
+	require.Equal(t, "internal-user-id", logs[0].ChatUserId)
+	require.Equal(t, "bound-user", logs[0].ChatUsername)
+	require.Equal(t, "bound-user", logs[0].ProviderUserId)
+	require.True(t, logs[0].Handled)
+	require.True(t, logs[0].Success)
+	require.Equal(t, CommunityBotResultTokenUnlocked, logs[0].ResultCode)
 }

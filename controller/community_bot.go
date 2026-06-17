@@ -3,6 +3,7 @@ package controller
 import (
 	"context"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/QuantumNous/new-api/common"
@@ -140,6 +141,20 @@ func updateCommunityBotModule(c *gin.Context, module string) {
 		return
 	}
 	common.ApiSuccess(c, state)
+}
+
+func GetCommunityBotLogs(c *gin.Context) {
+	page, _ := strconv.Atoi(c.Query("p"))
+	size, _ := strconv.Atoi(c.Query("size"))
+	logs, total, err := model.GetCommunityBotLogs(page, size, c.Query("module"), c.Query("result_code"))
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	common.ApiSuccess(c, gin.H{
+		"items": logs,
+		"total": total,
+	})
 }
 
 func SyncCommunityBotOnce(c *gin.Context) {

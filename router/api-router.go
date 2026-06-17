@@ -203,6 +203,7 @@ func SetApiRouter(router *gin.Engine) {
 		communityBotRoute.Use(middleware.RootAuth())
 		{
 			communityBotRoute.GET("/config", controller.GetCommunityBotConfig)
+			communityBotRoute.GET("/logs", controller.GetCommunityBotLogs)
 			communityBotRoute.PUT("/config", controller.UpdateCommunityBotConfig)
 			communityBotRoute.PUT("/modules/group-checkin", controller.UpdateCommunityBotGroupCheckin)
 			communityBotRoute.PUT("/modules/token-unlock", controller.UpdateCommunityBotTokenUnlock)

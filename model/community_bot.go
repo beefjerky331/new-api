@@ -96,12 +96,67 @@ func (CommunityTokenUnlock) TableName() string {
 	return "community_token_unlocks"
 }
 
+type CommunityBotLog struct {
+	Id             int        `json:"id" gorm:"primaryKey"`
+	Module         string     `json:"module" gorm:"type:varchar(64);not null;index"`
+	RoomId         string     `json:"room_id" gorm:"type:varchar(128);not null;index"`
+	MessageId      string     `json:"message_id" gorm:"type:varchar(128);not null;index"`
+	MessageText    string     `json:"message_text" gorm:"type:text"`
+	Keyword        string     `json:"keyword" gorm:"type:varchar(128)"`
+	ChatUserId     string     `json:"chat_user_id" gorm:"type:varchar(256);index"`
+	ChatUsername   string     `json:"chat_username" gorm:"type:varchar(256);index"`
+	ProviderUserId string     `json:"provider_user_id" gorm:"type:varchar(256);index"`
+	UserId         int        `json:"user_id" gorm:"index"`
+	ResultCode     string     `json:"result_code" gorm:"type:varchar(64);not null;index"`
+	Handled        bool       `json:"handled" gorm:"not null;default:false"`
+	Success        bool       `json:"success" gorm:"not null;default:false"`
+	QuotaAwarded   int        `json:"quota_awarded" gorm:"default:0"`
+	UnlockedUntil  *time.Time `json:"unlocked_until"`
+	ReplyText      string     `json:"reply_text" gorm:"type:text"`
+	Error          string     `json:"error" gorm:"type:text"`
+	CreatedAt      time.Time  `json:"created_at" gorm:"index"`
+}
+
+func (CommunityBotLog) TableName() string {
+	return "community_bot_logs"
+}
+
 type CommunityTokenCreateUnlockStatus struct {
 	Bound         bool       `json:"bound"`
 	Unlocked      bool       `json:"unlocked"`
 	UnlockedUntil *time.Time `json:"unlocked_until"`
 	RoomId        string     `json:"room_id"`
 	Keyword       string     `json:"keyword"`
+}
+
+func RecordCommunityBotLog(log *CommunityBotLog) error {
+	if log == nil {
+		return nil
+	}
+	return DB.Create(log).Error
+}
+
+func GetCommunityBotLogs(page int, size int, module string, resultCode string) ([]CommunityBotLog, int64, error) {
+	if page < 1 {
+		page = 1
+	}
+	if size <= 0 || size > 100 {
+		size = 20
+	}
+	query := DB.Model(&CommunityBotLog{})
+	if module != "" {
+		query = query.Where("module = ?", module)
+	}
+	if resultCode != "" {
+		query = query.Where("result_code = ?", resultCode)
+	}
+	var total int64
+	if err := query.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+	var logs []CommunityBotLog
+	err := query.Order("id desc").Limit(size).Offset((page - 1) * size).Find(&logs).Error
+	return logs, total, err
 }
 
 func defaultCommunityBotConfig() *CommunityBotConfig {

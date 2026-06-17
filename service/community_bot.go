@@ -40,13 +40,14 @@ type CommunityChatUser struct {
 }
 
 type CommunityBotProcessResult struct {
-	Handled       bool
-	Success       bool
-	Code          string
-	UserId        int
-	QuotaAwarded  int
-	UnlockedUntil *time.Time
-	ReplyText     string
+	Handled        bool
+	Success        bool
+	Code           string
+	UserId         int
+	ProviderUserId string
+	QuotaAwarded   int
+	UnlockedUntil  *time.Time
+	ReplyText      string
 }
 
 type CommunityBotClient struct {
@@ -237,12 +238,21 @@ func ProcessCommunityBotMessage(state *model.CommunityBotRoomState, message Comm
 	}
 	message.FromUserID = matchedProviderUserID
 	result.UserId = user.Id
+	result.ProviderUserId = matchedProviderUserID
 
 	switch state.Module {
 	case model.CommunityBotModuleTokenUnlock:
-		return processCommunityTokenUnlock(state, message, now, user.Id)
+		result, err := processCommunityTokenUnlock(state, message, now, user.Id)
+		if result != nil {
+			result.ProviderUserId = matchedProviderUserID
+		}
+		return result, err
 	default:
-		return processCommunityGroupCheckin(state, message, now, user.Id)
+		result, err := processCommunityGroupCheckin(state, message, now, user.Id)
+		if result != nil {
+			result.ProviderUserId = matchedProviderUserID
+		}
+		return result, err
 	}
 }
 
@@ -339,6 +349,37 @@ func communityCheckinQuota(state *model.CommunityBotRoomState) int {
 	return minQuota + rand.Intn(maxQuota-minQuota+1)
 }
 
+func recordCommunityBotMessageLog(state *model.CommunityBotRoomState, message CommunityChatMessage, result *CommunityBotProcessResult, processErr error) error {
+	if state == nil {
+		return nil
+	}
+	log := &model.CommunityBotLog{
+		Module:       state.Module,
+		RoomId:       state.RoomId,
+		MessageId:    message.ID,
+		MessageText:  message.Text,
+		Keyword:      state.Keyword,
+		ChatUserId:   message.FromUserID,
+		ChatUsername: message.FromUser.Username,
+		ResultCode:   CommunityBotResultIgnored,
+		CreatedAt:    time.Now(),
+	}
+	if result != nil {
+		log.ProviderUserId = result.ProviderUserId
+		log.UserId = result.UserId
+		log.ResultCode = result.Code
+		log.Handled = result.Handled
+		log.Success = result.Success
+		log.QuotaAwarded = result.QuotaAwarded
+		log.UnlockedUntil = result.UnlockedUntil
+		log.ReplyText = result.ReplyText
+	}
+	if processErr != nil {
+		log.Error = processErr.Error()
+	}
+	return model.RecordCommunityBotLog(log)
+}
+
 func StartCommunityBotWorker() {
 	go communityBotWorkerLoop()
 }
@@ -401,6 +442,9 @@ func syncCommunityBotRoom(ctx context.Context, client *CommunityBotClient, confi
 	}
 	for _, message := range messages {
 		result, err := ProcessCommunityBotMessage(state, message, time.Now())
+		if logErr := recordCommunityBotMessageLog(state, message, result, err); logErr != nil && err == nil {
+			err = logErr
+		}
 		if err != nil {
 			return err
 		}

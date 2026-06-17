@@ -26,8 +26,11 @@ import {
   Input,
   InputNumber,
   Row,
+  Select,
   Space,
   Switch,
+  Table,
+  Tag,
   Typography,
 } from '@douyinfe/semi-ui';
 import { Bot, RefreshCw, Save } from 'lucide-react';
@@ -74,6 +77,24 @@ const defaultTokenUnlock = {
   last_sync_at: '',
 };
 
+const logPageSize = 20;
+
+const moduleOptions = [
+  { value: 'all', label: '全部模块' },
+  { value: 'group_checkin', label: '群组签到' },
+  { value: 'token_unlock', label: '令牌解锁' },
+];
+
+const resultOptions = [
+  { value: 'all', label: '全部结果' },
+  { value: 'ignored', label: '已忽略' },
+  { value: 'unbound', label: '未绑定' },
+  { value: 'already_checked_in', label: '今日已签到' },
+  { value: 'checkin_awarded', label: '签到成功' },
+  { value: 'token_unlocked', label: '令牌已解锁' },
+  { value: 'duplicate_message', label: '重复消息' },
+];
+
 function Field({ label, children }) {
   return (
     <div className='mb-4'>
@@ -83,13 +104,43 @@ function Field({ label, children }) {
   );
 }
 
+function formatDate(value) {
+  if (!value) {
+    return '-';
+  }
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+  return date.toLocaleString();
+}
+
+function formatQuota(value) {
+  if (!value) {
+    return '-';
+  }
+  return Number(value).toLocaleString();
+}
+
+function getOptionLabel(options, value) {
+  return (
+    options.find((option) => option.value === value)?.label || value || '-'
+  );
+}
+
 export default function CommunityBot() {
   const { t } = useTranslation();
   const [config, setConfig] = useState(defaultConfig);
   const [apiToken, setApiToken] = useState('');
   const [groupCheckin, setGroupCheckin] = useState(defaultGroupCheckin);
   const [tokenUnlock, setTokenUnlock] = useState(defaultTokenUnlock);
+  const [logs, setLogs] = useState([]);
+  const [logTotal, setLogTotal] = useState(0);
+  const [logPage, setLogPage] = useState(1);
+  const [logModule, setLogModule] = useState('all');
+  const [logResult, setLogResult] = useState('all');
   const [loading, setLoading] = useState(false);
+  const [logsLoading, setLogsLoading] = useState(false);
 
   const loadConfig = async () => {
     try {
@@ -106,9 +157,37 @@ export default function CommunityBot() {
     }
   };
 
+  const loadLogs = async () => {
+    setLogsLoading(true);
+    try {
+      const res = await API.get('/api/community-bot/logs', {
+        params: {
+          p: logPage,
+          size: logPageSize,
+          module: logModule === 'all' ? undefined : logModule,
+          result_code: logResult === 'all' ? undefined : logResult,
+        },
+      });
+      if (!res.data.success) {
+        showError(res.data.message || t('加载社区机器人日志失败'));
+        return;
+      }
+      setLogs(res.data.data.items || []);
+      setLogTotal(res.data.data.total || 0);
+    } catch (error) {
+      showError(error);
+    } finally {
+      setLogsLoading(false);
+    }
+  };
+
   useEffect(() => {
     loadConfig();
   }, []);
+
+  useEffect(() => {
+    loadLogs();
+  }, [logPage, logModule, logResult]);
 
   const saveAll = async () => {
     setLoading(true);
@@ -141,6 +220,7 @@ export default function CommunityBot() {
       if (res.data.success) {
         showSuccess(t('同步完成'));
         await loadConfig();
+        await loadLogs();
       } else {
         showError(res.data.message || t('同步失败'));
       }
@@ -150,6 +230,79 @@ export default function CommunityBot() {
       setLoading(false);
     }
   };
+
+  const logColumns = [
+    {
+      title: t('时间'),
+      dataIndex: 'created_at',
+      width: 180,
+      render: (value) => formatDate(value),
+    },
+    {
+      title: t('模块'),
+      dataIndex: 'module',
+      width: 110,
+      render: (value) => getOptionLabel(moduleOptions, value),
+    },
+    {
+      title: t('结果'),
+      dataIndex: 'result_code',
+      width: 120,
+      render: (value, record) => (
+        <Tag
+          color={record.success ? 'green' : record.handled ? 'orange' : 'grey'}
+        >
+          {getOptionLabel(resultOptions, value)}
+        </Tag>
+      ),
+    },
+    {
+      title: t('消息 ID'),
+      dataIndex: 'message_id',
+      width: 150,
+      render: (value) => value || '-',
+    },
+    {
+      title: t('社区用户'),
+      dataIndex: 'chat_username',
+      width: 150,
+      render: (value, record) =>
+        value || record.provider_user_id || record.chat_user_id || '-',
+    },
+    {
+      title: t('new-api 用户 ID'),
+      dataIndex: 'user_id',
+      width: 130,
+      render: (value) => value || '-',
+    },
+    {
+      title: t('消息内容'),
+      dataIndex: 'message_text',
+      width: 260,
+      render: (value) => (
+        <Text ellipsis={{ showTooltip: true }}>{value || '-'}</Text>
+      ),
+    },
+    {
+      title: t('奖励 / 解锁'),
+      dataIndex: 'quota_awarded',
+      width: 180,
+      render: (value, record) =>
+        value
+          ? `${formatQuota(value)} Tokens`
+          : formatDate(record.unlocked_until),
+    },
+    {
+      title: t('回复 / 错误'),
+      dataIndex: 'reply_text',
+      width: 280,
+      render: (value, record) => (
+        <Text ellipsis={{ showTooltip: true }}>
+          {record.error || value || '-'}
+        </Text>
+      ),
+    },
+  ];
 
   return (
     <div className='mt-[60px] px-2'>
@@ -162,10 +315,19 @@ export default function CommunityBot() {
           <Text type='secondary'>{t('社区签到与令牌解锁')}</Text>
         </div>
         <Space>
-          <Button icon={<RefreshCw size={16} />} onClick={syncOnce} loading={loading}>
+          <Button
+            icon={<RefreshCw size={16} />}
+            onClick={syncOnce}
+            loading={loading}
+          >
             {t('手动同步')}
           </Button>
-          <Button type='primary' icon={<Save size={16} />} onClick={saveAll} loading={loading}>
+          <Button
+            type='primary'
+            icon={<Save size={16} />}
+            onClick={saveAll}
+            loading={loading}
+          >
             {t('保存设置')}
           </Button>
         </Space>
@@ -202,9 +364,7 @@ export default function CommunityBot() {
                       mode='password'
                       value={apiToken}
                       placeholder={
-                        config.api_token_configured
-                          ? t('已配置')
-                          : t('未配置')
+                        config.api_token_configured ? t('已配置') : t('未配置')
                       }
                       onChange={setApiToken}
                     />
@@ -357,17 +517,78 @@ export default function CommunityBot() {
         <Col xs={24} lg={8}>
           <Card title={t('状态')}>
             <Field label={t('群组签到游标')}>
-              <Input value={groupCheckin.last_cursor_message_id || '-'} readOnly />
+              <Input
+                value={groupCheckin.last_cursor_message_id || '-'}
+                readOnly
+              />
             </Field>
             <Field label={t('群组签到错误')}>
               <Input value={groupCheckin.last_error || '-'} readOnly />
             </Field>
             <Field label={t('令牌解锁游标')}>
-              <Input value={tokenUnlock.last_cursor_message_id || '-'} readOnly />
+              <Input
+                value={tokenUnlock.last_cursor_message_id || '-'}
+                readOnly
+              />
             </Field>
             <Field label={t('令牌解锁错误')}>
               <Input value={tokenUnlock.last_error || '-'} readOnly />
             </Field>
+          </Card>
+        </Col>
+
+        <Col xs={24}>
+          <Card
+            title={t('社区机器人日志')}
+            headerExtraContent={
+              <Space wrap>
+                <Select
+                  value={logModule}
+                  style={{ width: 140 }}
+                  optionList={moduleOptions.map((option) => ({
+                    value: option.value,
+                    label: t(option.label),
+                  }))}
+                  onChange={(value) => {
+                    setLogModule(value);
+                    setLogPage(1);
+                  }}
+                />
+                <Select
+                  value={logResult}
+                  style={{ width: 150 }}
+                  optionList={resultOptions.map((option) => ({
+                    value: option.value,
+                    label: t(option.label),
+                  }))}
+                  onChange={(value) => {
+                    setLogResult(value);
+                    setLogPage(1);
+                  }}
+                />
+                <Button
+                  icon={<RefreshCw size={16} />}
+                  onClick={loadLogs}
+                  loading={logsLoading}
+                >
+                  {t('刷新')}
+                </Button>
+              </Space>
+            }
+          >
+            <Table
+              columns={logColumns}
+              dataSource={logs}
+              rowKey='id'
+              loading={logsLoading}
+              scroll={{ x: 'max-content' }}
+              pagination={{
+                currentPage: logPage,
+                pageSize: logPageSize,
+                total: logTotal,
+                onChange: (page) => setLogPage(page),
+              }}
+            />
           </Card>
         </Col>
       </Row>

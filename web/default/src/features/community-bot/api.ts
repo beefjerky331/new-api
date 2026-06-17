@@ -61,6 +61,36 @@ export type TokenCreateUnlockStatus = {
   keyword: string
 }
 
+export type CommunityBotLog = {
+  id: number
+  module: string
+  room_id: string
+  message_id: string
+  message_text: string
+  keyword: string
+  chat_user_id: string
+  chat_username: string
+  provider_user_id: string
+  user_id: number
+  result_code: string
+  handled: boolean
+  success: boolean
+  quota_awarded: number
+  unlocked_until?: string | null
+  reply_text: string
+  error: string
+  created_at: string
+}
+
+export type CommunityBotLogsResponse = {
+  success: boolean
+  message?: string
+  data: {
+    items: CommunityBotLog[]
+    total: number
+  }
+}
+
 export async function getCommunityBotConfig(): Promise<CommunityBotConfigResponse> {
   const res = await api.get('/api/community-bot/config')
   return res.data
@@ -83,6 +113,16 @@ export async function updateCommunityBotModule(
 
 export async function syncCommunityBotOnce() {
   const res = await api.post('/api/community-bot/sync-once')
+  return res.data
+}
+
+export async function getCommunityBotLogs(params: {
+  p: number
+  size: number
+  module?: string
+  result_code?: string
+}): Promise<CommunityBotLogsResponse> {
+  const res = await api.get('/api/community-bot/logs', { params })
   return res.data
 }
 
