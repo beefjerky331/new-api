@@ -231,3 +231,29 @@ func TestCommunityBotSyncRecordsMessageLogs(t *testing.T) {
 	require.True(t, logs[0].Success)
 	require.Equal(t, CommunityBotResultTokenUnlocked, logs[0].ResultCode)
 }
+
+func TestCommunityBotSkipsIgnoredMessageLogs(t *testing.T) {
+	setupCommunityBotServiceTest(t)
+	err := recordCommunityBotMessageLog(&model.CommunityBotRoomState{
+		Module:  model.CommunityBotModuleTokenUnlock,
+		RoomId:  model.DefaultCommunityTokenUnlockRoomID,
+		Keyword: model.DefaultCommunityTokenUnlockKeyword,
+	}, CommunityChatMessage{
+		ID:         "ignored-message-1",
+		FromUserID: "internal-user-id",
+		FromUser: CommunityChatUser{
+			ID:       "internal-user-id",
+			Username: "bound-user",
+		},
+		RoomID: model.DefaultCommunityTokenUnlockRoomID,
+		Text:   "我要领鸡蛋",
+	}, &CommunityBotProcessResult{
+		Code: CommunityBotResultIgnored,
+	}, nil)
+	require.NoError(t, err)
+
+	logs, total, err := model.GetCommunityBotLogs(1, 10, "", "")
+	require.NoError(t, err)
+	require.EqualValues(t, 0, total)
+	require.Len(t, logs, 0)
+}

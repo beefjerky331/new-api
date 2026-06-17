@@ -353,6 +353,9 @@ func recordCommunityBotMessageLog(state *model.CommunityBotRoomState, message Co
 	if state == nil {
 		return nil
 	}
+	if processErr == nil && (result == nil || (!result.Handled && result.Code == CommunityBotResultIgnored)) {
+		return nil
+	}
 	log := &model.CommunityBotLog{
 		Module:       state.Module,
 		RoomId:       state.RoomId,
