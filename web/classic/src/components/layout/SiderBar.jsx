@@ -38,6 +38,7 @@ const routerMap = {
   topup: '/console/topup',
   user: '/console/user',
   subscription: '/console/subscription',
+  community_bot: '/console/community-bot',
   log: '/console/log',
   midjourney: '/console/midjourney',
   setting: '/console/setting',
@@ -182,6 +183,12 @@ const SiderBar = ({ onNavigate = () => {} }) => {
         itemKey: 'user',
         to: '/user',
         className: isAdmin() ? '' : 'tableHiddle',
+      },
+      {
+        text: t('社区机器人'),
+        itemKey: 'community_bot',
+        to: '/community-bot',
+        className: isRoot() ? '' : 'tableHiddle',
       },
       {
         text: t('系统设置'),

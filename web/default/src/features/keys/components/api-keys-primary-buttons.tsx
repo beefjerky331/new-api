@@ -33,7 +33,10 @@ export function ApiKeysPrimaryButtons() {
     try {
       const res = await getTokenCreateUnlockStatus()
       if (!res.success) {
-        window.alert(res.message || t('请先在社区聊天室发送关键词解锁'))
+        window.alert(
+          res.message ||
+            t('请先在本站点的社区聊天室发送 我要添加令牌 解锁功能')
+        )
         return
       }
       if (!res.data?.bound) {
@@ -43,7 +46,7 @@ export function ApiKeysPrimaryButtons() {
         return
       }
       if (!res.data.unlocked) {
-        window.alert(t('请先在社区聊天室发送关键词解锁'))
+        window.alert(t('请先在本站点的社区聊天室发送 我要添加令牌 解锁功能'))
         return
       }
       setOpen('create')

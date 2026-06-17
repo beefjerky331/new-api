@@ -4624,7 +4624,7 @@
     "Synced": "Synced",
     "Sync failed": "Sync failed",
     "Manage dc.hhhl.cc group check-in and token unlock.": "Manage dc.hhhl.cc group check-in and token unlock.",
-    "请先在社区聊天室发送关键词解锁": "Please send the unlock keyword in the community chat room first",
+    "请先在本站点的社区聊天室发送 我要添加令牌 解锁功能": "Please send 我要添加令牌 in this site's community chat room to unlock token creation.",
     "请先绑定 dc.hhhl.cc OAuth 后再去社区聊天室发送关键词解锁。": "Please bind dc.hhhl.cc OAuth before sending the unlock keyword in the community chat room.",
     "Zoom": "Zoom"
   }

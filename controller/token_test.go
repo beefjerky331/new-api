@@ -637,7 +637,7 @@ func TestAddTokenRequiresCommunityUnlockForBoundUser(t *testing.T) {
 	if response.Success {
 		t.Fatalf("expected add token to fail without active community unlock")
 	}
-	if response.Message != "请先在社区聊天室发送关键词解锁" {
+	if response.Message != "请先在本站点的社区聊天室发送 我要添加令牌 解锁功能" {
 		t.Fatalf("expected unlock guidance message, got %q", response.Message)
 	}
 }

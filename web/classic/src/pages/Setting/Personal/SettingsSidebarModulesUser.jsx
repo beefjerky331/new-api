@@ -107,6 +107,8 @@ export default function SettingsSidebarModulesUser() {
         deployment: isSidebarModuleAllowed('admin', 'deployment'),
         redemption: isSidebarModuleAllowed('admin', 'redemption'),
         user: isSidebarModuleAllowed('admin', 'user'),
+        subscription: isSidebarModuleAllowed('admin', 'subscription'),
+        community_bot: isSidebarModuleAllowed('admin', 'community_bot'),
         setting: isSidebarModuleAllowed('admin', 'setting'),
       };
     }
@@ -350,6 +352,16 @@ export default function SettingsSidebarModulesUser() {
           description: t('兑换码生成管理'),
         },
         { key: 'user', title: t('用户管理'), description: t('用户账户管理') },
+        {
+          key: 'subscription',
+          title: t('订阅管理'),
+          description: t('订阅套餐管理'),
+        },
+        {
+          key: 'community_bot',
+          title: t('社区机器人'),
+          description: t('社区签到与令牌解锁'),
+        },
         {
           key: 'setting',
           title: t('系统设置'),

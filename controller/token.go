@@ -195,7 +195,7 @@ func AddToken(c *gin.Context) {
 	if !unlockStatus.Unlocked {
 		c.JSON(http.StatusOK, gin.H{
 			"success": false,
-			"message": "请先在社区聊天室发送关键词解锁",
+			"message": "请先在本站点的社区聊天室发送 我要添加令牌 解锁功能",
 		})
 		return
 	}
