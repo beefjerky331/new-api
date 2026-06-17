@@ -132,6 +132,39 @@ func TestCommunityBotTokenUnlockCreatesThirtyMinuteWindow(t *testing.T) {
 	require.WithinDuration(t, now.Add(30*time.Minute), *status.UnlockedUntil, time.Second)
 }
 
+func TestCommunityBotTokenUnlockMatchesOAuthUsernameWhenChatUsesInternalUserId(t *testing.T) {
+	provider := setupCommunityBotServiceTest(t)
+	require.NoError(t, model.DB.Where("provider_id = ? AND provider_user_id = ?", provider.Id, "community-user-1").Delete(&model.UserOAuthBinding{}).Error)
+	require.NoError(t, model.DB.Create(&model.UserOAuthBinding{
+		UserId:         1,
+		ProviderId:     provider.Id,
+		ProviderUserId: "beefjerky",
+	}).Error)
+	state := &model.CommunityBotRoomState{
+		Module:             model.CommunityBotModuleTokenUnlock,
+		RoomId:             model.DefaultCommunityTokenUnlockRoomID,
+		Keyword:            model.DefaultCommunityTokenUnlockKeyword,
+		Enabled:            true,
+		UnlockDurationMins: 30,
+	}
+	now := time.Date(2026, 6, 17, 10, 0, 0, 0, time.UTC)
+
+	result, err := ProcessCommunityBotMessage(state, CommunityChatMessage{
+		ID:         "unlock-message-by-username",
+		FromUserID: "an4pphigbh",
+		FromUser: CommunityChatUser{
+			ID:       "an4pphigbh",
+			Username: "beefjerky",
+		},
+		RoomID: state.RoomId,
+		Text:   "我要添加令牌",
+	}, now)
+	require.NoError(t, err)
+	require.True(t, result.Handled)
+	require.True(t, result.Success)
+	require.Equal(t, CommunityBotResultTokenUnlocked, result.Code)
+}
+
 func TestCommunityBotSkipsUnboundCommunityUser(t *testing.T) {
 	setupCommunityBotServiceTest(t)
 	state := &model.CommunityBotRoomState{

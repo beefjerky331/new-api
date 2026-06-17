@@ -26,11 +26,17 @@ const (
 )
 
 type CommunityChatMessage struct {
-	ID         string    `json:"id"`
-	CreatedAt  time.Time `json:"createdAt"`
-	FromUserID string    `json:"fromUserId"`
-	RoomID     string    `json:"toRoomId"`
-	Text       string    `json:"text"`
+	ID         string            `json:"id"`
+	CreatedAt  time.Time         `json:"createdAt"`
+	FromUserID string            `json:"fromUserId"`
+	FromUser   CommunityChatUser `json:"fromUser"`
+	RoomID     string            `json:"toRoomId"`
+	Text       string            `json:"text"`
+}
+
+type CommunityChatUser struct {
+	ID       string `json:"id"`
+	Username string `json:"username"`
 }
 
 type CommunityBotProcessResult struct {
@@ -168,6 +174,27 @@ func (c *CommunityBotClient) httpClient() *http.Client {
 	return http.DefaultClient
 }
 
+func communityMessageProviderUserIDs(message CommunityChatMessage) []string {
+	ids := make([]string, 0, 2)
+	for _, id := range []string{message.FromUserID, message.FromUser.Username} {
+		id = strings.TrimSpace(id)
+		if id == "" {
+			continue
+		}
+		duplicate := false
+		for _, existing := range ids {
+			if existing == id {
+				duplicate = true
+				break
+			}
+		}
+		if !duplicate {
+			ids = append(ids, id)
+		}
+	}
+	return ids
+}
+
 func ProcessCommunityBotMessage(state *model.CommunityBotRoomState, message CommunityChatMessage, now time.Time) (*CommunityBotProcessResult, error) {
 	result := &CommunityBotProcessResult{Code: CommunityBotResultIgnored}
 	if state == nil || !state.Enabled || strings.TrimSpace(state.Keyword) == "" {
@@ -191,15 +218,24 @@ func ProcessCommunityBotMessage(state *model.CommunityBotRoomState, message Comm
 		}
 		return nil, err
 	}
-	user, err := model.GetUserByOAuthBinding(providerId, message.FromUserID)
-	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			result.Code = CommunityBotResultUnbound
-			result.ReplyText = "未找到你的 new-api 账号绑定，请先使用 dc.hhhl.cc OAuth 登录或绑定账号。"
-			return result, nil
+	var user *model.User
+	var matchedProviderUserID string
+	for _, providerUserID := range communityMessageProviderUserIDs(message) {
+		user, err = model.GetUserByOAuthBinding(providerId, providerUserID)
+		if err == nil {
+			matchedProviderUserID = providerUserID
+			break
 		}
-		return nil, err
+		if !errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, err
+		}
 	}
+	if user == nil {
+		result.Code = CommunityBotResultUnbound
+		result.ReplyText = "未找到你的 new-api 账号绑定，请先使用 dc.hhhl.cc OAuth 登录或绑定账号。"
+		return result, nil
+	}
+	message.FromUserID = matchedProviderUserID
 	result.UserId = user.Id
 
 	switch state.Module {
